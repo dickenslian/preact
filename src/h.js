@@ -36,29 +36,45 @@ const EMPTY_CHILDREN = [];
  *  append. Can be infinitely nested Arrays.
  *
  * @public
+ * {
+ *      key,
+ *      nodeName,
+ *      attributes,
+ *      children
+ * }
  */
 export function h(nodeName, attributes) {
-	let children=EMPTY_CHILDREN, lastSimple, child, simple, i;
+    let children=EMPTY_CHILDREN, 
+        lastSimple, child, simple, i;
+    
 	for (i=arguments.length; i-- > 2; ) {
 		stack.push(arguments[i]);
-	}
+    }
+
+    // 如果由children属性，则提取出来
 	if (attributes && attributes.children!=null) {
+        // 不支持既有实际的children又传children属性
 		if (!stack.length) stack.push(attributes.children);
 		delete attributes.children;
-	}
+    }
+    
+    // 对children做处理
 	while (stack.length) {
+        // 如果是数组，就再结构一层
 		if ((child = stack.pop()) && child.pop!==undefined) {
 			for (i=child.length; i--; ) stack.push(child[i]);
 		}
 		else {
 			if (typeof child==='boolean') child = null;
 
+            // simple指的是文本节点
 			if ((simple = typeof nodeName!=='function')) {
 				if (child==null) child = '';
 				else if (typeof child==='number') child = String(child);
 				else if (typeof child!=='string') simple = false;
-			}
-
+            }
+            
+            // 如果连续2个文本节点，则做字符串拼接
 			if (simple && lastSimple) {
 				children[children.length-1] += child;
 			}

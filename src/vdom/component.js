@@ -24,6 +24,7 @@ export function setComponentProps(component, props, renderMode, context, mountAl
 	delete props.ref;
 	delete props.key;
 
+    // 生命周期
 	if (typeof component.constructor.getDerivedStateFromProps === 'undefined') {
 		if (!component.base || mountAll) {
 			if (component.componentWillMount) component.componentWillMount();
@@ -48,6 +49,7 @@ export function setComponentProps(component, props, renderMode, context, mountAl
 			renderComponent(component, SYNC_RENDER, mountAll);
 		}
 		else {
+            // setState
 			enqueueRender(component);
 		}
 	}
@@ -74,20 +76,27 @@ export function renderComponent(component, renderMode, mountAll, isChild) {
 		context = component.context,
 		previousProps = component.prevProps || props,
 		previousState = component.prevState || state,
-		previousContext = component.prevContext || context,
+        previousContext = component.prevContext || context,
+        
 		isUpdate = component.base,
 		nextBase = component.nextBase,
 		initialBase = isUpdate || nextBase,
-		initialChildComponent = component._component,
+        initialChildComponent = component._component,
+        
 		skip = false,
 		snapshot = previousContext,
 		rendered, inst, cbase;
 
+    // 生命周期
 	if (component.constructor.getDerivedStateFromProps) {
-		state = extend(extend({}, state), component.constructor.getDerivedStateFromProps(props, state));
+		state = extend(
+            extend({}, state), 
+            component.constructor.getDerivedStateFromProps(props, state));
 		component.state = state;
 	}
 
+    // 如果是组件更新，调用生命周期函数
+    // isUpdate = component.base
 	// if updating
 	if (isUpdate) {
 		component.props = previousProps;
@@ -106,10 +115,13 @@ export function renderComponent(component, renderMode, mountAll, isChild) {
 		component.context = context;
 	}
 
-	component.prevProps = component.prevState = component.prevContext = component.nextBase = null;
+    component.prevProps = component.prevState = component.prevContext = component.nextBase = null;
+    
+    // 只有_dirty为false才会被放入更新队列
 	component._dirty = false;
 
 	if (!skip) {
+        // vdom
 		rendered = component.render(props, state, context);
 
 		// context to pass to the child, can be updated via (grand-)parent component
@@ -124,31 +136,43 @@ export function renderComponent(component, renderMode, mountAll, isChild) {
 		let childComponent = rendered && rendered.nodeName,
 			toUnmount, base;
 
+        // 高阶组件，高阶组件才需要_component，_component里面又有_parentComponent属性
 		if (typeof childComponent==='function') {
 			// set up high order component link
-
 			let childProps = getNodeProps(rendered);
 			inst = initialChildComponent;
 
 			if (inst && inst.constructor===childComponent && childProps.key==inst.__key) {
+                // 同步更新，又会再调用renderComponent
 				setComponentProps(inst, childProps, SYNC_RENDER, context, false);
 			}
 			else {
 				toUnmount = inst;
 
+                // 分创建实例和属性赋值2个步骤
 				component._component = inst = createComponent(childComponent, childProps, context);
-				inst.nextBase = inst.nextBase || nextBase;
-				inst._parentComponent = component;
-				setComponentProps(inst, childProps, NO_RENDER, context, false);
+                inst.nextBase = inst.nextBase || nextBase;
+                // _parentComponent指向高阶组件
+                inst._parentComponent = component;
+                // NO_RENDER不进行渲染
+                setComponentProps(inst, childProps, NO_RENDER, context, false);
+                // 递归调用自己
 				renderComponent(inst, SYNC_RENDER, mountAll, true);
 			}
 
 			base = inst.base;
 		}
 		else {
+            /*
+                isUpdate = component.base,
+		        nextBase = component.nextBase,
+		        initialBase = isUpdate || nextBase,
+                initialChildComponent = component._component,
+             */
 			cbase = initialBase;
 
-			// destroy high order component link
+            // destroy high order component link
+            // 不是高阶组件，不需要_component属性
 			toUnmount = initialChildComponent;
 			if (toUnmount) {
 				cbase = component._component = null;
@@ -181,8 +205,10 @@ export function renderComponent(component, renderMode, mountAll, isChild) {
 			let componentRef = component,
 				t = component;
 			while ((t=t._parentComponent)) {
+                // 所有高阶组件的base都等于组件的base
 				(componentRef = t).base = base;
-			}
+            }
+            // base的_component等于高阶组件
 			base._component = componentRef;
 			base._componentConstructor = componentRef.constructor;
 		}
@@ -196,7 +222,7 @@ export function renderComponent(component, renderMode, mountAll, isChild) {
 		// are called before the componentDidUpdate() hook in the parent.
 		// Note: disabled as it causes duplicate hooks, see https://github.com/developit/preact/issues/750
 		// flushMounts();
-
+        // 生命周期
 		if (component.componentDidUpdate) {
 			component.componentDidUpdate(previousProps, previousState, snapshot);
 		}
@@ -224,28 +250,39 @@ export function buildComponentFromVNode(dom, vnode, context, mountAll) {
 		originalComponent = c,
 		oldDom = dom,
 		isDirectOwner = c && dom._componentConstructor===vnode.nodeName,
-		isOwner = isDirectOwner,
-		props = getNodeProps(vnode);
+        isOwner = isDirectOwner,
+        // 获取属性值，包括默认属性值
+        props = getNodeProps(vnode);
+    
+    // 针对高阶组件，一直找到最顶层
 	while (c && !isOwner && (c=c._parentComponent)) {
 		isOwner = c.constructor===vnode.nodeName;
 	}
 
 	if (c && isOwner && (!mountAll || c._component)) {
-		setComponentProps(c, props, ASYNC_RENDER, context, mountAll);
+        // 异步更新
+        setComponentProps(c, props, ASYNC_RENDER, context, mountAll);
+        
+        // dom节点存在base里面
 		dom = c.base;
-	}
+    }
+    // 创建组件
 	else {
+        // 组件替换
 		if (originalComponent && !isDirectOwner) {
 			unmountComponent(originalComponent);
 			dom = oldDom = null;
 		}
 
+        // 组件创建的起点，此时还没有_component
 		c = createComponent(vnode.nodeName, props, context);
 		if (dom && !c.nextBase) {
 			c.nextBase = dom;
 			// passing dom/oldDom as nextBase will recycle it if unused, so bypass recycling on L229:
 			oldDom = null;
-		}
+        }
+        
+        // 创建dom节点，关联dom与component(setComponentProps里面调用的renderComponent的时候关联)
 		setComponentProps(c, props, SYNC_RENDER, context, mountAll);
 		dom = c.base;
 

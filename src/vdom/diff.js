@@ -50,10 +50,12 @@ export function diff(dom, vnode, context, mountAll, parent, componentRoot) {
 		// when first starting the diff, check if we're diffing an SVG or within an SVG
 		isSvgMode = parent!=null && parent.ownerSVGElement!==undefined;
 
+        // 没有属性缓存，即dom元素不是由Preact创建
 		// hydration is indicated by the existing element to be diffed not having a prop cache
 		hydrating = dom!=null && !(ATTR_KEY in dom);
 	}
 
+    // 返回diff后的dom元素
 	let ret = idiff(dom, vnode, context, mountAll, componentRoot);
 
 	// append the element if its a new parent
@@ -79,6 +81,7 @@ export function diff(dom, vnode, context, mountAll, parent, componentRoot) {
  * @param {boolean} [componentRoot] ?
  * @private
  */
+// dom跟vdom做比较
 function idiff(dom, vnode, context, mountAll, componentRoot) {
 	let out = dom,
 		prevSvgMode = isSvgMode;
@@ -98,7 +101,8 @@ function idiff(dom, vnode, context, mountAll, componentRoot) {
 			}
 		}
 		else {
-			// it wasn't a Text node: replace it with one and recycle the old Element
+            // it wasn't a Text node: replace it with one and recycle the old Element
+            // 在diff过程中建node
 			out = document.createTextNode(vnode);
 			if (dom) {
 				if (dom.parentNode) dom.parentNode.replaceChild(out, dom);
@@ -145,13 +149,17 @@ function idiff(dom, vnode, context, mountAll, componentRoot) {
 		props = out[ATTR_KEY],
 		vchildren = vnode.children;
 
+    // 新创建的dom元素
 	if (props==null) {
-		props = out[ATTR_KEY] = {};
+        props = out[ATTR_KEY] = {};
+        
+        // 对新创建的元素复用当前dom的属性
 		for (let a=out.attributes, i=a.length; i--; ) props[a[i].name] = a[i].value;
 	}
 
 	// Optimization: fast-path for elements containing a single TextNode:
-	if (!hydrating && vchildren && vchildren.length===1 && typeof vchildren[0]==='string' && fc!=null && fc.splitText!==undefined && fc.nextSibling==null) {
+    if (!hydrating && vchildren && vchildren.length===1 && typeof vchildren[0]==='string' && 
+        fc!=null && fc.splitText!==undefined && fc.nextSibling==null) {
 		if (fc.nodeValue!=vchildren[0]) {
 			fc.nodeValue = vchildren[0];
 		}
@@ -184,15 +192,27 @@ function idiff(dom, vnode, context, mountAll, componentRoot) {
  *  similar to hydration
  */
 function innerDiffNode(dom, vchildren, context, mountAll, isHydrating) {
-	let originalChildren = dom.childNodes,
-		children = [],
-		keyed = {},
-		keyedLen = 0,
-		min = 0,
-		len = originalChildren.length,
-		childrenLen = 0,
-		vlen = vchildren ? vchildren.length : 0,
-		j, c, f, vchild, child;
+    let originalChildren = dom.childNodes,
+        len = originalChildren.length,
+
+        // 原来的，没有key的子元素
+        children = [],
+        childrenLen = 0,
+
+        // 原来的，有key的子元素
+        keyed = {},
+        keyedLen = 0,
+        
+        min = 0,
+		
+        vlen = vchildren ? vchildren.length : 0,
+        
+        j, c, f, 
+        
+        // 原子元素
+        child,
+        // 新的虚拟子元素
+        vchild;
 
 	// Build up a map of keyed children and an Array of unkeyed children:
 	if (len!==0) {
@@ -200,7 +220,8 @@ function innerDiffNode(dom, vchildren, context, mountAll, isHydrating) {
 			let child = originalChildren[i],
 				props = child[ATTR_KEY],
 				key = vlen && props ? child._component ? child._component.__key : props.key : null;
-			if (key!=null) {
+            
+                if (key!=null) {
 				keyedLen++;
 				keyed[key] = child;
 			}
@@ -227,12 +248,14 @@ function innerDiffNode(dom, vchildren, context, mountAll, isHydrating) {
 			// attempt to pluck a node of the same type from the existing children
 			else if (min<childrenLen) {
 				for (j=min; j<childrenLen; j++) {
-					if (children[j]!==undefined && isSameNodeType(c = children[j], vchild, isHydrating)) {
-						child = c;
-						children[j] = undefined;
-						if (j===childrenLen-1) childrenLen--;
-						if (j===min) min++;
-						break;
+                    if (children[j]!==undefined && 
+                        isSameNodeType(c = children[j], vchild, isHydrating)
+                    ) {
+                        child = c;
+                        children[j] = undefined;
+                        if (j===childrenLen-1) childrenLen--;
+                        if (j===min) min++;
+                        break;
 					}
 				}
 			}
@@ -244,10 +267,12 @@ function innerDiffNode(dom, vchildren, context, mountAll, isHydrating) {
 			if (child && child!==dom && child!==f) {
 				if (f==null) {
 					dom.appendChild(child);
-				}
+                }
+                // 如果刚好等于原来位置的下一个兄弟元素，原来位置的元素删掉
 				else if (child===f.nextSibling) {
 					removeNode(f);
-				}
+                }
+                // 将元素往前挪
 				else {
 					dom.insertBefore(child, f);
 				}
